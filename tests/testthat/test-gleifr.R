@@ -15,6 +15,10 @@ test_that("clean_names cleans attribute names", {
   expect_identical(res$name, c("entity_legal_name", "entity_status"))
 })
 
+test_that("clean_names passes NULL through", {
+  expect_null(clean_names(NULL))
+})
+
 test_that("lei_record_by_id validates inputs", {
   expect_error(lei_record_by_id(id = 123))
   expect_error(lei_record_by_id("foo", simplify = "yes"))
@@ -63,6 +67,15 @@ test_that("lei_autocomplete validates inputs", {
   expect_error(lei_autocomplete(q = "foo", field = "unsupported"))
 })
 
+test_that("lei_autocomplete supports ownedBy searches", {
+  local_mocked_bindings(
+    fetch_completions = function(path, field, q) field,
+    .package = "gleifr"
+  )
+
+  expect_identical(lei_autocomplete(q = "foo", field = "ownedBy"), "ownedBy")
+})
+
 test_that("lei_issuers returns expected format", {
   skip_on_cran()
   skip_on_ci()
@@ -94,6 +107,26 @@ test_that("lei_countries returns expected format", {
   expect_s3_class(res, "data.frame")
   expect_named(res, c("code", "name"))
   expect_gt(nrow(res), 0L)
+})
+
+test_that("paginated endpoints fetch past the first page", {
+  skip_on_cran()
+  skip_on_ci()
+  skip_if_offline()
+
+  expect_gt(nrow(lei_countries()), 200L)
+  expect_gt(nrow(lei_registration_authorities()), 200L)
+})
+
+test_that("empty results return NULL", {
+  skip_on_cran()
+  skip_on_ci()
+  skip_if_offline()
+
+  no_match <- "ZZZQQQNOSUCHENTITYXYZ123"
+
+  expect_null(lei_records(legal_name = no_match, limit = 5L))
+  expect_null(lei_fuzzy(no_match, field = "entity.legalName"))
 })
 
 test_that("lei_jurisdictions returns expected format", {

@@ -7,14 +7,15 @@
 \url{https://www.gleif.org/en/lei-data/gleif-api}
 }
 \usage{
-lei_autocomplete(q, field = c("fulltext", "owns"))
+lei_autocomplete(q, field = c("fulltext", "owns", "ownedBy"))
 }
 \arguments{
 \item{q}{(\code{character(1)})\cr
 The search query.}
 
 \item{field}{(\code{character(1)})\cr
-The field to search. One of \code{"fulltext"} or \code{"owns"}. Default is \code{"fulltext"}.}
+The field to search. One of \code{"fulltext"}, \code{"owns"}, or \code{"ownedBy"}.
+Default is \code{"fulltext"}.}
 }
 \value{
 A \code{data.frame()} with columns:
@@ -22,6 +23,8 @@ A \code{data.frame()} with columns:
 \item \strong{value}: The matched value
 \item \strong{lei}: The Legal Entity Identifier of the matched record, or \code{NA} if none is linked
 }
+
+When nothing matches, \code{NULL}.
 }
 \description{
 Performs a prefix-based completion against the GLEIF API, returning candidate values together

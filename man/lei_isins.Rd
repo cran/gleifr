@@ -19,6 +19,8 @@ A \code{data.frame()} with columns:
 \item \strong{lei}: The Legal Entity Identifier
 \item \strong{isin}: The ISIN
 }
+
+When the LEI has no ISINs, \code{NULL}.
 }
 \description{
 Fetches the ISINs associated with a given LEI.
