@@ -1,6 +1,6 @@
 Package: gleifr
 Title: Client for the 'GLEIF' API
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: 
     person("Maximilian", "Mücke", , "muecke.maximilian@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0000-9432-9795"))
@@ -16,16 +16,16 @@ URL: https://m-muecke.github.io/gleifr/,
         https://github.com/m-muecke/gleifr
 BugReports: https://github.com/m-muecke/gleifr/issues
 Depends: R (>= 4.1.0)
-Imports: curl, httr2, stats, utils, xml2
-Suggests: testthat (>= 3.0.0)
+Imports: curl, httr2 (>= 1.0.0), stats, utils, xml2
+Suggests: testthat (>= 3.3.0)
 Config/roxygen2/markdown: TRUE
-Config/roxygen2/version: 8.0.0
+Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3
 Encoding: UTF-8
 NeedsCompilation: no
-Packaged: 2026-07-18 14:58:28 UTC; mmuecke
+Packaged: 2026-09-15 18:18:20 UTC; mmuecke
 Author: Maximilian Mücke [aut, cre] (ORCID:
     <https://orcid.org/0009-0000-9432-9795>)
 Maintainer: Maximilian Mücke <muecke.maximilian@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-07-18 15:50:08 UTC
+Date/Publication: 2026-09-16 02:20:02 UTC

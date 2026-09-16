@@ -44,7 +44,7 @@ lei_mapping <- function(type = c("isin", "bic", "mic", "oc")) {
 #' str(lei_record_by_id("529900W18LQJJN6SJ336", simplify = FALSE), max.level = 2)
 #' }
 lei_record_by_id <- function(id, simplify = TRUE) {
-  stopifnot(is_string(id), is_flag(simplify))
+  stopifnot(is_lei(id), is_flag(simplify))
   path <- paste("lei-records", id, sep = "/")
   json <- lei_fetch(path)
   if (!simplify) {
@@ -79,6 +79,9 @@ lei_record_by_id <- function(id, simplify = TRUE) {
 #' @param ... Additional filter parameters passed to the GLEIF API.
 #'   These are appended as query parameters, e.g.
 #'   `"filter[entity.subCategory]" = "CENTRAL_GOVERNMENT"`.
+#' @param sort (`NULL` | `character(1)`)\cr
+#'   Field to sort the results by, e.g. `"entity.legalName"`. Prefix with `"-"` for descending
+#'   order, e.g. `"-registration.lastUpdateDate"`. Default `NULL` uses the API's default order.
 #' @param limit (`NULL` | `integer(1)`)\cr
 #'   Maximum number of records to return. Default `200L`. Use `NULL` to fetch all matching records.
 #' @param simplify (`logical(1)`)\cr
@@ -100,6 +103,9 @@ lei_record_by_id <- function(id, simplify = TRUE) {
 #'
 #' # filter by country and registration status
 #' head(lei_records(country = "DE", registration_status = "ISSUED", limit = 5))
+#'
+#' # most recently updated records first
+#' head(lei_records(country = "DE", sort = "-registration.lastUpdateDate", limit = 5))
 #' }
 lei_records <- function(
   legal_name = NULL,
@@ -111,6 +117,7 @@ lei_records <- function(
   category = NULL,
   isin = NULL,
   ...,
+  sort = NULL,
   limit = 200L,
   simplify = TRUE
 ) {
@@ -123,6 +130,7 @@ lei_records <- function(
     is_string(entity_status, null_ok = TRUE),
     is_string(category, null_ok = TRUE),
     is_string(isin, null_ok = TRUE),
+    is_string(sort, null_ok = TRUE),
     is_count(limit, null_ok = TRUE),
     is_flag(simplify)
   )
@@ -135,7 +143,8 @@ lei_records <- function(
       `filter[registration.status]` = registration_status,
       `filter[entity.status]` = entity_status,
       `filter[entity.category]` = category,
-      `filter[isin]` = isin
+      `filter[isin]` = isin,
+      sort = sort
     ),
     list(...)
   )
@@ -185,7 +194,7 @@ lei_regions <- function() {
 #' - **name**: The issuer name
 #' - **marketing_name**: The marketing name
 #' - **website**: The issuer website
-#' - **accreditation_date**: The accreditation date
+#' - **accreditation_date**: The accreditation date as `POSIXct` in UTC
 #' @export
 #' @examples
 #' \donttest{
@@ -200,7 +209,7 @@ lei_issuers <- function() {
       name = attrs$name,
       marketing_name = attrs$marketingName %||% NA_character_,
       website = attrs$website %||% NA_character_,
-      accreditation_date = attrs$accreditationDate %||% NA_character_,
+      accreditation_date = as_utc(attrs$accreditationDate),
       check.names = FALSE
     )
   })
@@ -285,13 +294,15 @@ lei_legal_forms <- function() {
 #' Fetch the list of registration authorities
 #'
 #' Fetches the list of registration authorities (RA codes) recognized by the GLEIF API. These
-#' resolve the registration authority codes that appear in [lei_record_by_id()] output to the issuing
-#' business registries.
+#' resolve the registration authority codes that appear in [lei_record_by_id()] output to the
+#' issuing business registries.
 #'
 #' @returns A `data.frame()` with columns:
 #' - **code**: The registration authority (RA) code
-#' - **international_name**: The international name of the authority
-#' - **local_name**: The local name of the authority, or `NA` if none
+#' - **international_name**: The international name of the registry, or `NA` if none
+#' - **local_name**: The local name of the registry, or `NA` if none
+#' - **international_organization_name**: The international organization name, or `NA` if none
+#' - **local_organization_name**: The local organization name, or `NA` if none
 #' - **website**: The authority website, or `NA` if none
 #' @export
 #' @examples
@@ -306,6 +317,8 @@ lei_registration_authorities <- function() {
       code = attrs$code,
       international_name = attrs$internationalName %||% NA_character_,
       local_name = attrs$localName %||% NA_character_,
+      international_organization_name = attrs$internationalOrganizationName %||% NA_character_,
+      local_organization_name = attrs$localOrganizationName %||% NA_character_,
       website = attrs$website %||% NA_character_,
       check.names = FALSE
     )
@@ -354,7 +367,7 @@ fetch_code_list <- function(endpoint) {
 #' }
 lei_parent <- function(id, type = c("direct", "ultimate"), simplify = TRUE) {
   type <- match.arg(type)
-  stopifnot(is_string(id), is_flag(simplify))
+  stopifnot(is_lei(id), is_flag(simplify))
   path <- paste("lei-records", id, paste0(type, "-parent"), sep = "/")
   json <- lei_fetch(path)
   if (!simplify) {
@@ -381,7 +394,7 @@ lei_parent <- function(id, type = c("direct", "ultimate"), simplify = TRUE) {
 #' - **name**: The attribute name
 #' - **value**: The attribute value
 #'
-#' When `simplify = FALSE`, a named `list()` containing the raw API response.
+#' When `simplify = FALSE`, a `list()` of the raw record objects from the API.
 #'
 #' When `simplify = TRUE` and no records match, `NULL`.
 #' @seealso [lei_parent()] to fetch the parent record of a LEI.
@@ -396,7 +409,7 @@ lei_parent <- function(id, type = c("direct", "ultimate"), simplify = TRUE) {
 #' }
 lei_children <- function(id, type = c("direct", "ultimate"), limit = 200L, simplify = TRUE) {
   type <- match.arg(type)
-  stopifnot(is_string(id), is_count(limit, null_ok = TRUE), is_flag(simplify))
+  stopifnot(is_lei(id), is_count(limit, null_ok = TRUE), is_flag(simplify))
   path <- paste("lei-records", id, paste0(type, "-children"), sep = "/")
   data <- lei_fetch_iter(path, limit = limit)
   if (!simplify) {
@@ -405,6 +418,128 @@ lei_children <- function(id, type = c("direct", "ultimate"), limit = 200L, simpl
   out <- lapply(data, \(x) simplify_records(x$attributes))
   tab <- do.call(rbind, out)
   clean_names(tab)
+}
+
+#' Fetch the parent relationship record of a LEI
+#'
+#' Fetches the relationship record that links a LEI to its direct or ultimate parent. Where
+#' [lei_parent()] returns the parent's own LEI record, this returns the relationship itself: its type,
+#' status, the periods it covers, and how it was corroborated.
+#'
+#' @param id (`character(1)`)\cr
+#'   The Legal Entity Identifier (LEI) to fetch the parent relationship for.
+#' @param type (`character(1)`)\cr
+#'   The type of parent relationship to fetch. One of `"direct"` or `"ultimate"`.
+#'   Default is `"direct"`.
+#' @returns A `data.frame()` with one row and columns (all dates are `POSIXct` in UTC):
+#' - **start_node**: The LEI of the child entity
+#' - **end_node**: The LEI of the parent entity
+#' - **relationship_type**: The relationship type, e.g. `"IS_DIRECTLY_CONSOLIDATED_BY"`
+#' - **relationship_status**: The relationship status, e.g. `"ACTIVE"`
+#' - **relationship_period_start**, **relationship_period_end**: When the relationship holds
+#' - **accounting_period_start**, **accounting_period_end**: The accounting period it was reported for
+#' - **document_filing_period_start**, **document_filing_period_end**: The filing period of the
+#'   supporting document, or `NA` if none
+#' - **initial_registration_date**: When the relationship was first registered
+#' - **last_update_date**: When the relationship was last updated
+#' - **registration_status**: The registration status, e.g. `"PUBLISHED"` or `"LAPSED"`
+#' - **next_renewal_date**: When the relationship is due for renewal
+#' - **managing_lou**: The LEI of the managing Local Operating Unit
+#' - **corroboration_level**: How the relationship was validated, e.g. `"FULLY_CORROBORATED"`
+#' - **corroboration_documents**: The type of supporting document, or `NA` if none
+#' - **corroboration_reference**: A reference to the supporting document, or `NA` if none
+#' - **valid_from**, **valid_to**: When the record is valid in the GLEIF database
+#'
+#' Errors when no parent relationship is reported for the LEI.
+#' @seealso [lei_child_relationships()] for the relationships to the children of a LEI,
+#'   [lei_parent()] for the parent's LEI record.
+#' @export
+#' @examples
+#' \donttest{
+#' lei_parent_relationship("529900W18LQJJN6SJ336")
+#'
+#' lei_parent_relationship("529900W18LQJJN6SJ336", type = "ultimate")
+#' }
+lei_parent_relationship <- function(id, type = c("direct", "ultimate")) {
+  type <- match.arg(type)
+  stopifnot(is_lei(id))
+  path <- paste("lei-records", id, paste0(type, "-parent-relationship"), sep = "/")
+  json <- lei_fetch(path)
+  simplify_relationship(json$data$attributes)
+}
+
+#' Fetch the child relationship records of a LEI
+#'
+#' Fetches the relationship records that link a LEI to its direct or ultimate children. Where
+#' [lei_children()] returns the children's own LEI records, this returns the relationships
+#' themselves: their type, status, the periods they cover, and how they were corroborated.
+#'
+#' @param id (`character(1)`)\cr
+#'   The Legal Entity Identifier (LEI) to fetch the child relationships for.
+#' @param type (`character(1)`)\cr
+#'   The type of child relationships to fetch. One of `"direct"` or `"ultimate"`.
+#'   Default is `"direct"`.
+#' @param limit (`NULL` | `integer(1)`)\cr
+#'   Maximum number of records to return. Default `200L`. Use `NULL` to fetch all.
+#' @returns A `data.frame()` with one row per relationship and the same columns as
+#'   [lei_parent_relationship()], where **start_node** is the child and **end_node** is `id`.
+#'
+#' When the LEI has no children, `NULL`.
+#' @seealso [lei_parent_relationship()] for the relationship to the parent of a LEI,
+#'   [lei_children()] for the children's LEI records.
+#' @export
+#' @examples
+#' \donttest{
+#' lei_child_relationships("O2RNE8IBXP4R0TD8PU41", limit = 5)
+#'
+#' lei_child_relationships("O2RNE8IBXP4R0TD8PU41", type = "ultimate", limit = 5)
+#' }
+lei_child_relationships <- function(id, type = c("direct", "ultimate"), limit = 200L) {
+  type <- match.arg(type)
+  stopifnot(is_lei(id), is_count(limit, null_ok = TRUE))
+  path <- paste("lei-records", id, paste0(type, "-child-relationships"), sep = "/")
+  data <- lei_fetch_iter(path, limit = limit)
+  out <- lapply(data, \(x) simplify_relationship(x$attributes))
+  do.call(rbind, out)
+}
+
+simplify_relationship <- function(attrs) {
+  rel <- attrs$relationship
+  reg <- attrs$registration
+  periods <- rel$periods
+
+  period <- function(type, field) {
+    for (p in periods) {
+      if (identical(p$type, type)) {
+        return(as_utc(p[[field]]))
+      }
+    }
+    as_utc(NULL)
+  }
+
+  data.frame(
+    start_node = rel$startNode$id,
+    end_node = rel$endNode$id,
+    relationship_type = rel$type,
+    relationship_status = rel$status,
+    relationship_period_start = period("RELATIONSHIP_PERIOD", "startDate"),
+    relationship_period_end = period("RELATIONSHIP_PERIOD", "endDate"),
+    accounting_period_start = period("ACCOUNTING_PERIOD", "startDate"),
+    accounting_period_end = period("ACCOUNTING_PERIOD", "endDate"),
+    document_filing_period_start = period("DOCUMENT_FILING_PERIOD", "startDate"),
+    document_filing_period_end = period("DOCUMENT_FILING_PERIOD", "endDate"),
+    initial_registration_date = as_utc(reg$initialRegistrationDate),
+    last_update_date = as_utc(reg$lastUpdateDate),
+    registration_status = reg$status %||% NA_character_,
+    next_renewal_date = as_utc(reg$nextRenewalDate),
+    managing_lou = reg$managingLou %||% NA_character_,
+    corroboration_level = reg$corroborationLevel %||% NA_character_,
+    corroboration_documents = reg$corroborationDocuments %||% NA_character_,
+    corroboration_reference = reg$corroborationReference %||% NA_character_,
+    valid_from = as_utc(attrs$validFrom),
+    valid_to = as_utc(attrs$validTo),
+    check.names = FALSE
+  )
 }
 
 #' Fetch ISINs for a LEI
@@ -426,7 +561,7 @@ lei_children <- function(id, type = c("direct", "ultimate"), limit = 200L, simpl
 #' head(lei_isins("529900W18LQJJN6SJ336", limit = 10))
 #' }
 lei_isins <- function(id, limit = 200L) {
-  stopifnot(is_string(id), is_count(limit, null_ok = TRUE))
+  stopifnot(is_lei(id), is_count(limit, null_ok = TRUE))
   path <- paste("lei-records", id, "isins", sep = "/")
   data <- lei_fetch_iter(path, limit = limit)
   out <- lapply(data, function(x) {
@@ -450,7 +585,7 @@ lei_isins <- function(id, limit = 200L) {
 #' - **record_type**: The record the change applies to, `"LEI"` or `"RR"`
 #' - **modification_type**: The type of change, e.g. `"UPDATE"`
 #' - **field**: The path of the changed field
-#' - **date**: The date of the change
+#' - **date**: The date of the change as `POSIXct` in UTC
 #' - **value_old**: The previous value, or `NA` if none
 #' - **value_new**: The new value, or `NA` if none
 #'
@@ -462,7 +597,7 @@ lei_isins <- function(id, limit = 200L) {
 #' head(lei_modifications("529900W18LQJJN6SJ336", limit = 10))
 #' }
 lei_modifications <- function(id, limit = 200L) {
-  stopifnot(is_string(id), is_count(limit, null_ok = TRUE))
+  stopifnot(is_lei(id), is_count(limit, null_ok = TRUE))
   path <- paste("lei-records", id, "field-modifications", sep = "/")
   data <- lei_fetch_iter(path, limit = limit)
   out <- lapply(data, function(x) {
@@ -472,7 +607,7 @@ lei_modifications <- function(id, limit = 200L) {
       record_type = attrs$recordType,
       modification_type = attrs$modificationType,
       field = attrs$field,
-      date = attrs$date,
+      date = as_utc(attrs$date),
       value_old = attrs$valueOld %||% NA_character_,
       value_new = attrs$valueNew %||% NA_character_,
       check.names = FALSE
